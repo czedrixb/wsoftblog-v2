@@ -1,0 +1,31 @@
+# systemd unit template — install manually on the deploy VM as
+# /etc/systemd/system/wsoftblog.service, then `sudo systemctl daemon-reload
+# && sudo systemctl enable --now wsoftblog`.
+#
+# Not tracked/managed from bitbucket-pipelines.yml, same convention as
+# wsoftlabs-website-v2's `wsoftlabs-website` unit (which also lives only on
+# the VM). deploy.sh only calls `systemctl restart wsoftblog` — it assumes
+# this file is already installed.
+#
+# Port 3001 — wsoftlabs-website-v2 (Nuxt) holds 3000 on the same VM.
+# Assumes Node 22 is available system-wide; adjust ExecStart's node path
+# (e.g. via nvm) if it lives elsewhere.
+
+[Unit]
+Description=W Labs Blog (Next.js + Payload) — WOS-313
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bitnami/projects/wsoftblog-v2/output
+Environment=HOSTNAME=0.0.0.0
+Environment=PORT=3001
+EnvironmentFile=/opt/bitnami/projects/wsoftblog-v2/output/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+User=bitnami
+Group=bitnami
+
+[Install]
+WantedBy=multi-user.target
