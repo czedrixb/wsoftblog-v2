@@ -5,11 +5,10 @@ import { test, expect } from "@playwright/test";
 // Self-contained: creates and cleans up its own post so it never perturbs
 // the seeded-data assumptions other specs make (e.g. "3 published posts").
 //
-// KNOWN ISSUE (tracked, not a test bug): see the same note in
-// admin-crud.spec.ts — the admin UI's Save Draft PATCH doesn't persist
-// field data under a production build, so this can never get past its own
-// setup step in that environment. See the WOS-313 report.
-test.fixme("draft is hidden everywhere, publishing makes it appear", async ({ page }) => {
+// (Previously test.fixme() due to the prod-only save failure — a CSRF origin
+// mismatch, see the note in admin-crud.spec.ts. Fixed in payload.config.ts /
+// playwright.config.ts.)
+test("draft is hidden everywhere, publishing makes it appear", async ({ page }) => {
   const title = `E2E Publish Toggle ${Date.now()}`;
 
   await page.goto("/admin/collections/posts/create");
@@ -19,6 +18,10 @@ test.fixme("draft is hidden everywhere, publishing makes it appear", async ({ pa
   await expect(page).toHaveURL(/\/admin\/collections\/posts\/\d+$/, { timeout: 15_000 });
   await expect(page.locator(".status__value")).toHaveText("초안");
 
+  // The slug is computed server-side (beforeValidate hook); reload so the
+  // form shows persisted state rather than racing the save response.
+  await page.reload();
+  await expect(page.locator("#field-slug")).not.toHaveValue("");
   const slug = await page.locator("#field-slug").inputValue();
   expect(slug).toBeTruthy();
   const docId = page.url().match(/posts\/(\d+)/)?.[1];

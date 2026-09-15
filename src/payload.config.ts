@@ -16,6 +16,18 @@ const dirname = path.dirname(filename);
 
 export default buildConfig({
   serverURL: process.env.NEXT_PUBLIC_SERVER_URL,
+  // Payload's sanitize step pushes serverURL into this CSRF origin allowlist,
+  // silently enabling strict Origin checking on every cookie-authed write.
+  // NEXT_PUBLIC_SERVER_URL must therefore match the browser-facing origin
+  // EXACTLY (scheme + host spelling + port) or all admin saves 403 — this was
+  // the "Save Draft fails in production" bug: prod/e2e served on other ports
+  // while the allowlist only held http://localhost:3000. The extra entries
+  // cover the localhost/127.0.0.1 spelling difference in local dev.
+  csrf: [
+    process.env.NEXT_PUBLIC_SERVER_URL,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ].filter((origin): origin is string => Boolean(origin)),
   admin: {
     user: Users.slug,
     importMap: {

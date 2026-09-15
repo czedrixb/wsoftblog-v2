@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getPayload } from "@/lib/getPayload";
-import { resolveLocale } from "@/lib/locale";
+import { fallbackFor, resolveLocale } from "@/lib/locale";
 
 // Force dynamic rendering — otherwise Next 16's production build can
 // statically prerender this list at build time and never see new/updated/
@@ -23,7 +23,7 @@ export default async function BlogListPage({ searchParams }: Props) {
   const { docs, totalPages, hasNextPage, hasPrevPage } = await payload.find({
     collection: "posts",
     locale,
-    fallbackLocale: "ko",
+    fallbackLocale: fallbackFor(locale),
     overrideAccess: false,
     sort: "-publishedAt",
     limit: PAGE_SIZE,

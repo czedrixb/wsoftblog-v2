@@ -7,20 +7,18 @@ import { test, expect } from "@playwright/test";
 // than button text or aria labels — the admin renders in Korean by default
 // (WOS-312 §5), so English text/label matching would never find anything.
 //
-// KNOWN ISSUE (tracked, not a test bug): under `next build && next start`
-// (production), the admin UI's "Save Draft" PATCH either 403s or persists
-// with every field empty — reproduced with Payload 3.88.0/3.89.0 and
-// Next.js 16.2.6/16.3.5, with both Webpack and Turbopack builds, with
-// session-based and stateless JWT auth, and with pnpm's hoisted and
-// default linker. The exact same write succeeds via `payload.update()`
-// (Local API, bypassing HTTP) and via this same UI flow under `next dev`.
-// See the WOS-313 report for full diagnostic detail. Un-skip once fixed
-// upstream or once a workaround is found.
+// Historical note: this spec was `test.fixme()` for a while because admin
+// saves 403'd under a production build. Root cause was never Payload/Next —
+// Payload pushes `serverURL` into its CSRF origin allowlist, and the prod
+// server ran on a port that didn't match NEXT_PUBLIC_SERVER_URL, so the
+// PATCH's Origin header got the auth cookie discarded. Fixed by aligning
+// NEXT_PUBLIC_SERVER_URL with the served origin (playwright.config.ts
+// webServer env) and adding an explicit `csrf` list in payload.config.ts.
 test.describe("admin post CRUD", () => {
   const title = `E2E Test Post ${Date.now()}`;
   const updatedTitle = `${title} (edited)`;
 
-  test.fixme("create, edit, then delete a post", async ({ page }) => {
+  test("create, edit, then delete a post", async ({ page }) => {
     await page.goto("/admin/collections/posts/create");
 
     await page.locator("#field-title").fill(title);

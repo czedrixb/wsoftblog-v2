@@ -2,7 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { RichText } from "@payloadcms/richtext-lexical/react";
 import { getPayload } from "@/lib/getPayload";
-import { resolveLocale } from "@/lib/locale";
+import { fallbackFor, resolveLocale } from "@/lib/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export default async function PostDetailPage({ params, searchParams }: Props) {
   const { docs } = await payload.find({
     collection: "posts",
     locale,
-    fallbackLocale: "ko",
+    fallbackLocale: fallbackFor(locale),
     overrideAccess: false,
     where: { slug: { equals: slug } },
     limit: 1,

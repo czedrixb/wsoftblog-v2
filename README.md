@@ -98,22 +98,30 @@ Two failure modes from the old blog are deliberately closed here:
   (`APP_PATH`), or the blue/green swap will delete uploaded images on every
   deploy, exactly as happened to the old blog.
 
-## Known issue — admin "Save Draft" under a production build
+## Fixed — admin "Save Draft" 403 under a production build (CSRF origin)
 
-**Do not treat this as fixed.** Under `next build && next start` (this
-project's production deploy target), the admin UI's "Save Draft"/"Publish"
-PATCH request intermittently 403s, or succeeds but persists every field
-empty — reproduced across Payload `3.88.0`/`3.89.0`, Next.js `16.2.6`/`16.3.5`,
-Webpack and Turbopack builds, session-based and stateless JWT auth, and
-pnpm's hoisted and default `node_modules` layouts. The same write succeeds
-via Payload's Local API directly (used by the seed script and by every
-public page) and via this same admin flow under `next dev`.
+Previously, admin Save Draft/Publish failed under `next build && next start`
+(403, or fields persisted empty) while working under `next dev` and via the
+Local API. **Root cause:** Payload silently pushes `serverURL` into its CSRF
+origin allowlist, and every production run served on a port other than 3000
+(e2e 3100, deploy 3001) while `NEXT_PUBLIC_SERVER_URL` stayed
+`http://localhost:3000` — so the browser's `Origin` header on PATCH/POST got
+the auth cookie discarded. It was never a Payload/Next incompatibility; the
+discriminating variable was the port, and `next dev` "worked" only because it
+happens to run on 3000. Confirmed by replaying the same authenticated PATCH
+with only the `Origin` header varied (403 vs 200).
 
-Two Playwright specs (`e2e/admin-crud.spec.ts`, `e2e/publish-toggle.spec.ts`)
-are marked `test.fixme()` with the full diagnostic trail in comments,
-rather than deleted or left silently failing. **Before treating this
-prototype as production-ready, this needs a fix or an upstream report** —
-see the WOS-313 verification report for the complete investigation.
+**The invariant to keep:** `NEXT_PUBLIC_SERVER_URL` must equal the
+browser-facing origin exactly (scheme + host spelling + port) in every
+environment. `payload.config.ts` additionally allowlists
+`http://localhost:3000` / `http://127.0.0.1:3000` for local dev, and
+`playwright.config.ts` builds the e2e production server with
+`NEXT_PUBLIC_SERVER_URL` set to its own baseURL.
+
+**And note it's baked in at build time:** `NEXT_PUBLIC_*` values are inlined
+into the bundle during `next build` (the pipeline writes `.env` before
+building, so CI is covered). Changing the VM's `.env` after the fact does
+nothing for this variable — a wrong value needs a rebuild + redeploy.
 
 ## Testing
 
@@ -121,10 +129,10 @@ see the WOS-313 verification report for the complete investigation.
 corepack pnpm exec playwright test
 ```
 
-Requires the app built/served and Postgres reachable (`docker compose up -d`
-+ `pnpm build && pnpm start`, or point `E2E_BASE_URL` at a running `pnpm dev`
-instance — the admin-mutation specs above only pass against `pnpm dev`,
-per the known issue).
+Requires Postgres reachable (`docker compose up -d`). With no `E2E_BASE_URL`
+set, Playwright builds and serves a production build itself (port 3100) with
+`NEXT_PUBLIC_SERVER_URL` matching that origin; all specs, including the
+admin-mutation ones, pass against it.
 
 ## Backlog (explicitly out of scope for WOS-313)
 

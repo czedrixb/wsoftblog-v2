@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getPayload } from "@/lib/getPayload";
-import { resolveLocale } from "@/lib/locale";
+import { fallbackFor, resolveLocale } from "@/lib/locale";
 import { toWirePost } from "@/lib/wireContract";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   const { docs } = await payload.find({
     collection: "posts",
     locale,
-    fallbackLocale: "ko",
+    fallbackLocale: fallbackFor(locale),
     overrideAccess: false,
     where: isNumeric ? { id: { equals: Number(id) } } : { slug: { equals: id } },
     limit: 1,
