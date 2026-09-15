@@ -27,7 +27,9 @@ function bannerUrl(banner: Post["banner"]): string | null {
 
 function authorOf(author: Post["author"]): WirePost["author"] {
   if (!author || typeof author === "number") return null;
-  return { name: author.name, twitter: author.twitter ?? null };
+  // The users collection no longer has a twitter field; the key stays in the
+  // wire shape (always null) so old Nuxt consumers keep parsing unchanged.
+  return { name: author.name, twitter: null };
 }
 
 export function toWirePostSummary(post: Post): WirePostSummary {

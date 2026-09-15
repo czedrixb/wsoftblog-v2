@@ -220,7 +220,6 @@ export interface User {
   id: number;
   name: string;
   role: 'editor' | 'admin';
-  twitter?: string | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -383,7 +382,6 @@ export interface MediaSelect<T extends boolean = true> {
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
-  twitter?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

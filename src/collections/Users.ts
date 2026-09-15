@@ -19,9 +19,9 @@ export const Users: CollectionConfig = {
   },
   auth: true,
   access: {
-    // Public read at the collection level — `name`/`twitter` are meant to be
-    // shown on published posts (byline, OG tags), same as the old wire
-    // contract. `email` and `role` are locked down at the field level below.
+    // Public read at the collection level — `name` is meant to be shown on
+    // published posts (byline, OG tags), same as the old wire contract.
+    // `email` and `role` are locked down at the field level below.
     read: () => true,
     create: ({ req }) => req.user?.role === "admin",
     update: ({ req }) => {
@@ -40,7 +40,7 @@ export const Users: CollectionConfig = {
     {
       // Overrides the field `auth: true` injects automatically, so it can
       // be hidden from anonymous/public reads (collection-level read is
-      // public, for name/twitter — email and role are not).
+      // public, for name — email and role are not).
       name: "email",
       type: "email",
       required: true,
@@ -65,11 +65,6 @@ export const Users: CollectionConfig = {
         // Only an admin may change roles — an editor cannot self-promote.
         update: ({ req }) => req.user?.role === "admin",
       },
-    },
-    {
-      name: "twitter",
-      label: { en: "Twitter / X handle", ko: "트위터 / X 핸들" },
-      type: "text",
     },
   ],
 };
