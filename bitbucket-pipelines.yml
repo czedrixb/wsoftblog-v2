@@ -1,0 +1,74 @@
+options:
+  max-parallel: 1
+
+image: node:22
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Build & Deploy Blog (Next.js + Payload)
+          caches:
+            - node
+          script:
+            - corepack enable
+            - corepack pnpm install --frozen-lockfile
+
+            # Inject .env (ENV_CONTENTS is base64-encoded to preserve spaces/special chars)
+            - echo "$ENV_CONTENTS" | base64 -d > .env
+
+            # Append individually-managed repository variables — same pattern as
+            # wsoftlabs-website-v2 (WOS-286). Overrides ENV_CONTENTS (last value
+            # wins) but is skipped when unset, so ENV_CONTENTS stays the fallback.
+            - |
+              printf '\n' >> .env
+              append_env() {
+                if [ -n "$2" ]; then printf '%s=%s\n' "$1" "$2" >> .env; fi
+              }
+              append_env DATABASE_URI "$DATABASE_URI"
+              append_env PAYLOAD_SECRET "$PAYLOAD_SECRET"
+              append_env NEXT_PUBLIC_SERVER_URL "$NEXT_PUBLIC_SERVER_URL"
+              append_env MEDIA_DIR "$MEDIA_DIR"
+              append_env NODE_ENV "$NODE_ENV"
+
+            # Fail the build loudly if required vars are missing, rather than
+            # silently deploying an app that can't reach its database.
+            - |
+              require_env() {
+                if [ -z "$2" ]; then echo "Missing required env var: $1" >&2; exit 1; fi
+              }
+              require_env DATABASE_URI "$(grep -m1 '^DATABASE_URI=' .env | cut -d= -f2-)"
+              require_env PAYLOAD_SECRET "$(grep -m1 '^PAYLOAD_SECRET=' .env | cut -d= -f2-)"
+
+            - corepack pnpm build
+
+            # Stage the standalone bundle. Next.js's standalone output doesn't
+            # include static assets or .env by default — assemble the full
+            # runnable directory before shipping it.
+            - rm -rf output-new && mkdir -p output-new
+            - cp -r .next/standalone/. output-new/
+            - mkdir -p output-new/.next
+            - cp -r .next/static output-new/.next/static
+            - if [ -d public ]; then cp -r public output-new/public; fi
+            - cp .env output-new/.env
+
+            # Setup SSH access
+            - mkdir -p ~/.ssh
+            - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+            - chmod 600 ~/.ssh/id_rsa
+            - ssh-keyscan -H $SERVER >> ~/.ssh/known_hosts
+
+            # Deploy with minimal downtime (blue/green swap, see deploy.sh)
+            - export APP_PATH="/opt/bitnami/projects/wsoftblog-v2"
+            - tar -czf output.tar.gz output-new
+            - scp output.tar.gz deploy.sh $SSH_USER@$SERVER:$APP_PATH/
+            - ssh $SSH_USER@$SERVER "
+                cd $APP_PATH &&
+                tar -xzf output.tar.gz &&
+                rm output.tar.gz &&
+                chmod +x deploy.sh &&
+                ./deploy.sh
+              "
+
+          services:
+            - docker
