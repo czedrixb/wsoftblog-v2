@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { RichText } from "@payloadcms/richtext-lexical/react";
 import { getPayload } from "@/lib/getPayload";
 import { fallbackFor, resolveLocale } from "@/lib/locale";
+import { mediaPath } from "@/lib/mediaPath";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function PostDetailPage({ params, searchParams }: Props) {
     <main className="mx-auto max-w-3xl px-6 py-16">
       {banner?.url && (
         <Image
-          src={banner.url}
+          src={mediaPath(banner.url)}
           alt={banner.alt ?? ""}
           width={1600}
           height={900}

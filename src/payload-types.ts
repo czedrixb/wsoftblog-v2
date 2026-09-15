@@ -120,17 +120,20 @@ export interface UserAuthOperations {
   };
 }
 /**
+ * Write a post, keep it with Save Draft, or make it live with Publish.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts".
  */
 export interface Post {
   id: number;
+  /**
+   * Korean and English content are saved separately — switch with the locale control top right.
+   */
   title: string;
   /**
-   * Auto-generated from the title. Edit only if you know why.
+   * Write the post body. Use the toolbar above for formatting.
    */
-  slug: string;
-  excerpt?: string | null;
   content?: {
     root: {
       type: string;
@@ -146,7 +149,21 @@ export interface Post {
     };
     [k: string]: unknown;
   } | null;
+  /**
+   * One or two sentences shown on list pages (optional).
+   */
+  excerpt?: string | null;
+  /**
+   * Large image shown at the top of the post (optional).
+   */
   banner?: (number | null) | Media;
+  /**
+   * Auto-generated from the title. Edit only if you know why.
+   */
+  slug: string;
+  /**
+   * Filled in automatically the first time you publish.
+   */
   publishedAt?: string | null;
   author?: (number | null) | User;
   updatedAt: string;
@@ -154,11 +171,16 @@ export interface Post {
   _status?: ('draft' | 'published') | null;
 }
 /**
+ * Image library for posts — banner images are uploaded here.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media".
  */
 export interface Media {
   id: number;
+  /**
+   * A short phrase describing the image (screen readers, search).
+   */
   alt: string;
   updatedAt: string;
   createdAt: string;
@@ -198,7 +220,6 @@ export interface User {
   id: number;
   name: string;
   role: 'editor' | 'admin';
-  twitter?: string | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -302,10 +323,10 @@ export interface PayloadMigration {
  */
 export interface PostsSelect<T extends boolean = true> {
   title?: T;
-  slug?: T;
-  excerpt?: T;
   content?: T;
+  excerpt?: T;
   banner?: T;
+  slug?: T;
   publishedAt?: T;
   author?: T;
   updatedAt?: T;
@@ -361,7 +382,6 @@ export interface MediaSelect<T extends boolean = true> {
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
-  twitter?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

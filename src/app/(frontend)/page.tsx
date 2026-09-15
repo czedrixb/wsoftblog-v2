@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getPayload } from "@/lib/getPayload";
 import { fallbackFor, resolveLocale } from "@/lib/locale";
+import { mediaPath } from "@/lib/mediaPath";
 
 // Force dynamic rendering — otherwise Next 16's production build can
 // statically prerender this list at build time and never see new/updated/
@@ -49,7 +50,7 @@ export default async function BlogListPage({ searchParams }: Props) {
               <Link href={`/posts/${post.slug}`} className="group block">
                 {banner?.url && (
                   <Image
-                    src={banner.url}
+                    src={mediaPath(banner.url)}
                     alt={banner.alt ?? ""}
                     width={800}
                     height={450}

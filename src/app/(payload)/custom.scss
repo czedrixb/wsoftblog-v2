@@ -1,0 +1,110 @@
+// WOS-320: make the content-locale switcher impossible to miss. The switcher
+// decides which language bucket (ko/en) localized fields are written to, and
+// it's a sticky per-user preference — editors previously typed into the wrong
+// bucket and their posts rendered "published but empty" (WOS-313).
+.localizer .popup-button,
+.localizer > button {
+  border: 1px solid var(--theme-warning-500, #f5a623);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-weight: 600;
+}
+
+// W Labs branding + dashboard. Everything below is additive and scoped to
+// .wlabs-* classes; only Payload theme vars are used so both admin themes
+// (html[data-theme]) work without extra overrides. Global --theme-*/--color-*
+// vars are deliberately NOT remapped — that would recolor status pills
+// app-wide (publish-toggle.spec.ts asserts on them).
+.wlabs-dashboard {
+  border: 1px solid var(--theme-border-color);
+  border-radius: 8px;
+  background: var(--theme-elevation-50);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+
+  &__header {
+    h2 {
+      margin: 0 0 0.25rem;
+    }
+
+    p {
+      margin: 0;
+      color: var(--theme-elevation-500);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+    margin: 1rem 0 1.5rem;
+  }
+
+  // Fallback styling in case Payload's internal .btn-- classes change:
+  // the quick actions stay recognizable as buttons.
+  &__action {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    border-radius: 4px;
+    padding: 0.4rem 1rem;
+    border: 1px solid var(--theme-border-color);
+  }
+
+  &__recent {
+    h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      color: var(--theme-elevation-600);
+    }
+
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-top: 1px solid var(--theme-border-color);
+
+      a {
+        color: var(--theme-text);
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+
+      time {
+        margin-left: auto;
+        color: var(--theme-elevation-500);
+        font-size: 0.8125rem;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+.wlabs-status {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+
+  &--published {
+    background: var(--theme-success-100);
+    color: var(--theme-success-650);
+  }
+
+  &--draft {
+    background: var(--theme-elevation-100);
+    color: var(--theme-elevation-650);
+  }
+}

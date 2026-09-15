@@ -12,12 +12,16 @@ export const Users: CollectionConfig = {
   admin: {
     useAsTitle: "name",
     defaultColumns: ["name", "email", "role"],
+    // UI-only: editors never manage users (the access rules below are the
+    // real gate), so keep the collection out of their nav (WOS-320).
+    hidden: ({ user }) => user?.role !== "admin",
+    hideAPIURL: true,
   },
   auth: true,
   access: {
-    // Public read at the collection level — `name`/`twitter` are meant to be
-    // shown on published posts (byline, OG tags), same as the old wire
-    // contract. `email` and `role` are locked down at the field level below.
+    // Public read at the collection level — `name` is meant to be shown on
+    // published posts (byline, OG tags), same as the old wire contract.
+    // `email` and `role` are locked down at the field level below.
     read: () => true,
     create: ({ req }) => req.user?.role === "admin",
     update: ({ req }) => {
@@ -31,11 +35,12 @@ export const Users: CollectionConfig = {
       name: "name",
       type: "text",
       required: true,
+      label: { en: "Name", ko: "이름" },
     },
     {
       // Overrides the field `auth: true` injects automatically, so it can
       // be hidden from anonymous/public reads (collection-level read is
-      // public, for name/twitter — email and role are not).
+      // public, for name — email and role are not).
       name: "email",
       type: "email",
       required: true,
@@ -49,9 +54,10 @@ export const Users: CollectionConfig = {
       type: "select",
       required: true,
       defaultValue: "editor",
+      label: { en: "Role", ko: "역할" },
       options: [
-        { label: "Editor", value: "editor" },
-        { label: "Admin", value: "admin" },
+        { label: { en: "Editor", ko: "편집자" }, value: "editor" },
+        { label: { en: "Admin", ko: "관리자" }, value: "admin" },
       ],
       saveToJWT: true,
       access: {
@@ -59,11 +65,6 @@ export const Users: CollectionConfig = {
         // Only an admin may change roles — an editor cannot self-promote.
         update: ({ req }) => req.user?.role === "admin",
       },
-    },
-    {
-      name: "twitter",
-      label: "Twitter / X handle",
-      type: "text",
     },
   ],
 };
