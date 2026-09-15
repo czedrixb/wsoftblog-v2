@@ -1,5 +1,5 @@
 import { postgresAdapter } from "@payloadcms/db-postgres";
-import { lexicalEditor } from "@payloadcms/richtext-lexical";
+import { FixedToolbarFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
 import { en } from "@payloadcms/translations/languages/en";
 import { ko } from "@payloadcms/translations/languages/ko";
 import path from "path";
@@ -35,7 +35,12 @@ export default buildConfig({
     },
   },
   collections: [Posts, Media, Users],
-  editor: lexicalEditor(),
+  // Non-developer authors expect a persistent toolbar at the top of the
+  // editor (like Word/Notion); the default Lexical toolbar only appears on
+  // text selection, which reads as "there is no toolbar" (WOS-320).
+  editor: lexicalEditor({
+    features: ({ defaultFeatures }) => [...defaultFeatures, FixedToolbarFeature()],
+  }),
   secret: process.env.PAYLOAD_SECRET || "",
   typescript: {
     outputFile: path.resolve(dirname, "payload-types.ts"),

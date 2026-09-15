@@ -12,6 +12,10 @@ export const Users: CollectionConfig = {
   admin: {
     useAsTitle: "name",
     defaultColumns: ["name", "email", "role"],
+    // UI-only: editors never manage users (the access rules below are the
+    // real gate), so keep the collection out of their nav (WOS-320).
+    hidden: ({ user }) => user?.role !== "admin",
+    hideAPIURL: true,
   },
   auth: true,
   access: {
@@ -31,6 +35,7 @@ export const Users: CollectionConfig = {
       name: "name",
       type: "text",
       required: true,
+      label: { en: "Name", ko: "이름" },
     },
     {
       // Overrides the field `auth: true` injects automatically, so it can
@@ -49,9 +54,10 @@ export const Users: CollectionConfig = {
       type: "select",
       required: true,
       defaultValue: "editor",
+      label: { en: "Role", ko: "역할" },
       options: [
-        { label: "Editor", value: "editor" },
-        { label: "Admin", value: "admin" },
+        { label: { en: "Editor", ko: "편집자" }, value: "editor" },
+        { label: { en: "Admin", ko: "관리자" }, value: "admin" },
       ],
       saveToJWT: true,
       access: {
@@ -62,7 +68,7 @@ export const Users: CollectionConfig = {
     },
     {
       name: "twitter",
-      label: "Twitter / X handle",
+      label: { en: "Twitter / X handle", ko: "트위터 / X 핸들" },
       type: "text",
     },
   ],

@@ -7,9 +7,16 @@ export const Posts: CollectionConfig = {
     singular: { en: "Post", ko: "포스트" },
     plural: { en: "Posts", ko: "포스트" },
   },
+  defaultSort: "-updatedAt",
   admin: {
     useAsTitle: "title",
-    defaultColumns: ["title", "_status", "publishedAt", "author"],
+    defaultColumns: ["title", "_status", "updatedAt"],
+    listSearchableFields: ["title", "slug"],
+    hideAPIURL: true,
+    description: {
+      ko: "글을 쓰고 '초안 저장'으로 보관하거나 '변경 사항 게시'로 발행하세요.",
+      en: "Write a post, keep it with Save Draft, or make it live with Publish.",
+    },
   },
   // Drafts are never public. Anonymous/public reads only see published posts;
   // logged-in users (editors/admins) can also see drafts in the admin UI.
@@ -37,6 +44,58 @@ export const Posts: CollectionConfig = {
       type: "text",
       required: true,
       localized: true,
+      label: { en: "Title", ko: "제목" },
+      admin: {
+        description: {
+          ko: "한국어와 English 내용은 따로 저장됩니다 — 우측 상단의 locale 스위처로 언어를 전환하세요.",
+          en: "Korean and English content are saved separately — switch with the locale control top right.",
+        },
+      },
+    },
+    {
+      name: "content",
+      type: "richText",
+      localized: true,
+      label: { en: "Content", ko: "본문" },
+      admin: {
+        description: {
+          ko: "본문을 입력하세요. 서식은 위쪽 도구 모음을 사용하세요.",
+          en: "Write the post body. Use the toolbar above for formatting.",
+        },
+      },
+    },
+    {
+      // Optional extras an author rarely needs on every post — collapsed by
+      // default so the edit screen stays title + body (WOS-320).
+      type: "collapsible",
+      label: { en: "Additional info", ko: "추가 정보" },
+      admin: { initCollapsed: true },
+      fields: [
+        {
+          name: "excerpt",
+          type: "textarea",
+          localized: true,
+          label: { en: "Excerpt", ko: "요약" },
+          admin: {
+            description: {
+              ko: "목록 화면에 보이는 한두 문장 요약 (선택).",
+              en: "One or two sentences shown on list pages (optional).",
+            },
+          },
+        },
+        {
+          name: "banner",
+          type: "upload",
+          relationTo: "media",
+          label: { en: "Banner image", ko: "배너 이미지" },
+          admin: {
+            description: {
+              ko: "글 상단에 표시되는 큰 이미지 (선택).",
+              en: "Large image shown at the top of the post (optional).",
+            },
+          },
+        },
+      ],
     },
     {
       // Shared across locales on purpose — a post's URL must not change
@@ -46,9 +105,13 @@ export const Posts: CollectionConfig = {
       required: true,
       unique: true,
       index: true,
+      label: { en: "Slug (URL)", ko: "슬러그 (URL)" },
       admin: {
         position: "sidebar",
-        description: "Auto-generated from the title. Edit only if you know why.",
+        description: {
+          ko: "제목에서 자동 생성됩니다. 이유를 알 때만 수정하세요.",
+          en: "Auto-generated from the title. Edit only if you know why.",
+        },
       },
       hooks: {
         beforeValidate: [
@@ -62,26 +125,16 @@ export const Posts: CollectionConfig = {
       },
     },
     {
-      name: "excerpt",
-      type: "textarea",
-      localized: true,
-    },
-    {
-      name: "content",
-      type: "richText",
-      localized: true,
-    },
-    {
-      name: "banner",
-      type: "upload",
-      relationTo: "media",
-    },
-    {
       name: "publishedAt",
       type: "date",
+      label: { en: "Published at", ko: "발행일" },
       admin: {
         position: "sidebar",
         date: { pickerAppearance: "dayAndTime" },
+        description: {
+          ko: "처음 게시할 때 자동으로 채워집니다.",
+          en: "Filled in automatically the first time you publish.",
+        },
       },
       hooks: {
         beforeChange: [
@@ -101,6 +154,7 @@ export const Posts: CollectionConfig = {
       name: "author",
       type: "relationship",
       relationTo: "users",
+      label: { en: "Author", ko: "작성자" },
       admin: { position: "sidebar" },
     },
   ],

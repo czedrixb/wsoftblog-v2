@@ -20,6 +20,7 @@ export default defineConfig({
   },
   projects: [
     { name: "setup", testMatch: /auth\.setup\.ts/ },
+    { name: "setup-editor", testMatch: /editor\.setup\.ts/ },
     {
       name: "chromium",
       use: {
@@ -27,6 +28,18 @@ export default defineConfig({
         storageState: "e2e/.auth/admin.json",
       },
       dependencies: ["setup"],
+      // editor-role.spec.ts asserts the trimmed-down EDITOR view (WOS-320);
+      // running it with the admin storage state would fail it by design.
+      testIgnore: /editor-role\.spec\.ts/,
+    },
+    {
+      name: "chromium-editor",
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "e2e/.auth/editor.json",
+      },
+      dependencies: ["setup-editor"],
+      testMatch: /editor-role\.spec\.ts/,
     },
   ],
   webServer: process.env.E2E_BASE_URL
