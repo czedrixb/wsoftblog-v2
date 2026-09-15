@@ -33,6 +33,14 @@ export default buildConfig({
     importMap: {
       baseDir: path.resolve(dirname),
     },
+    meta: {
+      titleSuffix: "- W Labs",
+      // Setting icons replaces Payload's default favicons entirely.
+      icons: [{ rel: "icon", type: "image/svg+xml", url: "/wlabs-icon.svg" }],
+    },
+    components: {
+      beforeDashboard: ["/components/admin/BeforeDashboard#BeforeDashboard"],
+    },
   },
   collections: [Posts, Media, Users],
   // Non-developer authors expect a persistent toolbar at the top of the
