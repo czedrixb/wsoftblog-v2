@@ -10,5 +10,13 @@ setup("authenticate as seeded admin", async ({ page }) => {
   await page.locator("#field-password").fill(ADMIN_PASSWORD);
   await page.locator("form.login__form").getByRole("button").click();
   await expect(page).toHaveURL(/\/admin(\/collections\/posts)?$/, { timeout: 15_000 });
+  // Pin the admin CONTENT locale to ko. It's a sticky per-user preference
+  // (payload_preferences), and if it drifts to en, every localized field the
+  // specs type gets written into the en bucket while the public surfaces
+  // read ko — which renders as "published but empty".
+  await page.goto("/admin/collections/posts?locale=ko");
+  await expect(page.getByRole("heading", { name: "포스트" })).toBeVisible({ timeout: 15_000 });
+  // Give the admin a beat to persist the locale preference server-side.
+  await page.waitForTimeout(1000);
   await page.context().storageState({ path: authFile });
 });

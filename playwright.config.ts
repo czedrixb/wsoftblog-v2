@@ -36,6 +36,9 @@ export default defineConfig({
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 180_000,
-        env: { PORT },
+        // NEXT_PUBLIC_SERVER_URL must equal the origin the browser drives:
+        // Payload derives its CSRF origin allowlist from it, and a mismatch
+        // 403s every admin write (the old "prod-only Save Draft" bug).
+        env: { PORT, NEXT_PUBLIC_SERVER_URL: baseURL },
       },
 });
