@@ -36,7 +36,7 @@ test("post banner renders through next/image", async ({ page, baseURL }) => {
   expect(mediaRes.ok()).toBe(true);
   const mediaId = (await mediaRes.json()).doc.id;
 
-  const postRes = await api.post("/api/posts?locale=ko", {
+  const postRes = await api.post("/api/posts", {
     headers: origin,
     data: {
       title: "E2E 배너 이미지 회귀 테스트",

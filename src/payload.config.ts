@@ -40,6 +40,10 @@ export default buildConfig({
     },
     components: {
       beforeDashboard: ["/components/admin/BeforeDashboard#BeforeDashboard"],
+      // Top-right of every admin view — the same switchLanguage() Payload's
+      // own Account > Payload Settings > Language selector uses, just
+      // surfaced without a trip to /admin/account.
+      actions: ["/components/admin/LanguageToggle#LanguageToggle"],
     },
   },
   collections: [Posts, Media, Users],
@@ -60,12 +64,9 @@ export default buildConfig({
   }),
   sharp,
   // Non-devs publish unaided (WOS-312 §5) — the admin UI opens in Korean by
-  // default. Post content itself is bilingual via field-level localization.
-  localization: {
-    locales: ["ko", "en"],
-    defaultLocale: "ko",
-    fallback: true,
-  },
+  // default. Post content is bilingual via explicit ko/en fields on Posts
+  // (see src/collections/Posts.ts), not Payload's locale switcher — a
+  // switcher made "my English text vanished" a recurring authoring bug.
   i18n: {
     fallbackLanguage: "ko",
     supportedLanguages: { en, ko },

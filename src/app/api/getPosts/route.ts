@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getPayload } from "@/lib/getPayload";
-import { fallbackFor, resolveLocale } from "@/lib/locale";
+import { resolveLocale } from "@/lib/locale";
 import { toWirePostSummary } from "@/lib/wireContract";
 
 // Wire-compat with the old Laravel `BlogController@index` contract, so
@@ -20,13 +20,11 @@ export async function GET(request: NextRequest) {
   const payload = await getPayload();
   const { docs } = await payload.find({
     collection: "posts",
-    locale,
-    fallbackLocale: fallbackFor(locale),
     overrideAccess: false,
     sort: "-publishedAt",
     limit: LIST_LIMIT,
     depth: 1,
   });
 
-  return NextResponse.json(docs.map(toWirePostSummary));
+  return NextResponse.json(docs.map((doc) => toWirePostSummary(doc, locale)));
 }

@@ -3,8 +3,9 @@ import Link from "next/link";
 import React from "react";
 
 // Admin-chrome strings live here, keyed by the viewer's admin language
-// (i18n.language, user-selectable at /admin/account). Content locale is a
-// separate axis — it only decides which title bucket payload.find reads.
+// (i18n.language, user-selectable at /admin/account). This dashboard always
+// lists posts by their Korean title (the base field) regardless of admin
+// language — Posts has no content-locale axis anymore (see Posts.ts).
 const translations = {
   ko: {
     welcome: "W Labs 블로그 관리",
@@ -31,20 +32,26 @@ const translations = {
 // Rendered above the stock collection cards (admin.components.beforeDashboard).
 // Every e2e setup project lands on /admin right after login, so this component
 // must render for any authenticated user and any DB state without throwing.
-export const BeforeDashboard = async ({ payload, user, i18n, locale }: ServerProps) => {
+export const BeforeDashboard = async ({ payload, user, i18n }: ServerProps) => {
   const lang = i18n?.language === "en" ? "en" : "ko";
   const t = translations[lang];
   const adminRoute = payload.config.routes.admin;
 
-  const { docs } = await payload.find({
+  const { docs: rawDocs } = await payload.find({
     collection: "posts",
     draft: true,
     limit: 5,
     sort: "-updatedAt",
     depth: 0,
-    locale: locale?.code === "en" ? "en" : "ko",
     select: { title: true, _status: true, updatedAt: true },
   });
+
+  // draft:true merges in rows from the versions table, and a version whose
+  // parent post was deleted out-of-band surfaces as a doc with id: null
+  // (posts_v.parent_id is ON DELETE SET NULL). Rendering those gives every
+  // <li> below the same "null" key — React then warns and may drop or
+  // duplicate rows — and their edit links would 404 anyway. Skip them.
+  const docs = rawDocs.filter((doc) => doc.id != null);
 
   const displayName =
     user && "name" in user && typeof user.name === "string" && user.name

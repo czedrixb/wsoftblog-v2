@@ -1,4 +1,6 @@
 import { convertLexicalToHTML } from "@payloadcms/richtext-lexical/html";
+import type { Locale } from "@/lib/locale";
+import { pick } from "@/lib/locale";
 import type { Media, Post } from "@/payload-types";
 
 /**
@@ -32,21 +34,22 @@ function authorOf(author: Post["author"]): WirePost["author"] {
   return { name: author.name, twitter: null };
 }
 
-export function toWirePostSummary(post: Post): WirePostSummary {
+export function toWirePostSummary(post: Post, locale: Locale): WirePostSummary {
   return {
     id: post.id,
-    title: post.title,
+    title: pick(locale, post.title, post.titleEn),
     slug: post.slug,
-    excerpt: post.excerpt ?? null,
+    excerpt: pick(locale, post.excerpt ?? null, post.excerptEn),
     banner_url: bannerUrl(post.banner),
     published_at: post.publishedAt ?? null,
     author: authorOf(post.author),
   };
 }
 
-export function toWirePost(post: Post): WirePost {
+export function toWirePost(post: Post, locale: Locale): WirePost {
+  const content = pick(locale, post.content, post.contentEn);
   return {
-    ...toWirePostSummary(post),
-    content: post.content ? convertLexicalToHTML({ data: post.content }) : null,
+    ...toWirePostSummary(post, locale),
+    content: content ? convertLexicalToHTML({ data: content }) : null,
   };
 }

@@ -10,11 +10,7 @@ setup("authenticate as seeded editor", async ({ page }) => {
   await page.locator("#field-password").fill(EDITOR_PASSWORD);
   await page.locator("form.login__form").getByRole("button").click();
   await expect(page).toHaveURL(/\/admin(\/collections\/posts)?$/, { timeout: 15_000 });
-  // Pin the CONTENT locale to ko — it's a sticky per-user preference, so the
-  // editor account needs its own pin just like the admin one (see
-  // auth.setup.ts for the full story).
-  await page.goto("/admin/collections/posts?locale=ko");
+  await page.goto("/admin/collections/posts");
   await expect(page.getByRole("heading", { name: "포스트" })).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(1000);
   await page.context().storageState({ path: authFile });
 });

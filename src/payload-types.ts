@@ -88,10 +88,10 @@ export interface Config {
   db: {
     defaultIDType: number;
   };
-  fallbackLocale: ('false' | 'none' | 'null') | false | null | ('ko' | 'en') | ('ko' | 'en')[];
+  fallbackLocale: null;
   globals: {};
   globalsSelect: {};
-  locale: 'ko' | 'en';
+  locale: null;
   widgets: {
     collections: CollectionsWidget;
   };
@@ -128,7 +128,7 @@ export interface UserAuthOperations {
 export interface Post {
   id: number;
   /**
-   * Korean and English content are saved separately — switch with the locale control top right.
+   * The post's title.
    */
   title: string;
   /**
@@ -153,6 +153,32 @@ export interface Post {
    * One or two sentences shown on list pages (optional).
    */
   excerpt?: string | null;
+  /**
+   * Optional. If left blank, the Korean title is shown instead.
+   */
+  titleEn?: string | null;
+  /**
+   * Optional. If left blank, the Korean content is shown instead.
+   */
+  contentEn?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Optional. If left blank, the Korean excerpt is shown instead.
+   */
+  excerptEn?: string | null;
   /**
    * Large image shown at the top of the post (optional).
    */
@@ -325,6 +351,9 @@ export interface PostsSelect<T extends boolean = true> {
   title?: T;
   content?: T;
   excerpt?: T;
+  titleEn?: T;
+  contentEn?: T;
+  excerptEn?: T;
   banner?: T;
   slug?: T;
   publishedAt?: T;

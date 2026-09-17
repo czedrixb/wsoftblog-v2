@@ -21,7 +21,6 @@ export const Media: CollectionConfig = {
       name: "alt",
       type: "text",
       required: true,
-      localized: true,
       label: { en: "Alt text", ko: "대체 텍스트" },
       admin: {
         description: {
