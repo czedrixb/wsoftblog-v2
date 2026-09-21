@@ -46,7 +46,7 @@ checking this range first.
 ```bash
 corepack pnpm install
 cp .env.example .env        # fill in PAYLOAD_SECRET with a real generated value
-docker compose up -d        # starts Postgres on localhost:5432
+# start Postgres locally (matching DATABASE_URI: wsoftblog/wsoftblog on localhost:5432)
 corepack pnpm seed          # creates admin+editor users and ~5 demo posts
 corepack pnpm dev           # http://localhost:3000, admin at /admin
 ```
@@ -129,7 +129,7 @@ nothing for this variable — a wrong value needs a rebuild + redeploy.
 corepack pnpm exec playwright test
 ```
 
-Requires Postgres reachable (`docker compose up -d`). With no `E2E_BASE_URL`
+Requires Postgres reachable at `DATABASE_URI`. With no `E2E_BASE_URL`
 set, Playwright builds and serves a production build itself (port 3100) with
 `NEXT_PUBLIC_SERVER_URL` matching that origin; all specs, including the
 admin-mutation ones, pass against it.
