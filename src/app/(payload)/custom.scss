@@ -1,15 +1,3 @@
-// WOS-320: make the content-locale switcher impossible to miss. The switcher
-// decides which language bucket (ko/en) localized fields are written to, and
-// it's a sticky per-user preference — editors previously typed into the wrong
-// bucket and their posts rendered "published but empty" (WOS-313).
-.localizer .popup-button,
-.localizer > button {
-  border: 1px solid var(--theme-warning-500, #f5a623);
-  border-radius: 4px;
-  padding: 2px 10px;
-  font-weight: 600;
-}
-
 // W Labs branding + dashboard. Everything below is additive and scoped to
 // .wlabs-* classes; only Payload theme vars are used so both admin themes
 // (html[data-theme]) work without extra overrides. Global --theme-*/--color-*

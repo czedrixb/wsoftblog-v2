@@ -22,7 +22,9 @@ test.describe("public blog list and detail", () => {
   test("pagination controls reflect page count", async ({ page }) => {
     await page.goto("/");
     // Seed data (3 published posts) fits on one page — Next/Previous
-    // should be absent, and the page indicator should read "Page 1 of 1".
-    await expect(page.getByText(/page 1 of/i)).toBeVisible();
+    // should be absent, and the page indicator should read the Korean
+    // default-locale form ("1페이지" of "1페이지"). The English form
+    // ("Page 1 of 1") is covered by locale-toggle.spec.ts.
+    await expect(page.getByText("1페이지 중 1페이지")).toBeVisible();
   });
 });

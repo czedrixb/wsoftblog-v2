@@ -46,4 +46,42 @@ test.describe("wire-compat API (/api/getPosts, /api/getPost/:id)", () => {
     const enTitles = list.map((p: { title: string }) => p.title);
     expect(enTitles).toContain("Publishing Workflow for Editors");
   });
+
+  test("?locale=ko returns the Korean title", async ({ request }) => {
+    const list = await (
+      await request.get("/api/getPosts?locale=ko")
+    ).json();
+    const koTitles = list.map((p: { title: string }) => p.title);
+    expect(koTitles).toContain("편집자를 위한 발행 워크플로우");
+  });
+
+  test("a post with no English translation still returns its Korean title under ?locale=en", async ({
+    request,
+    baseURL,
+  }) => {
+    const origin = { Origin: baseURL! };
+    const slug = "e2e-ko-only-fallback";
+
+    // Clean any leftovers from a previous aborted run.
+    const stale = await (
+      await request.get(`/api/posts?where[slug][equals]=${slug}&depth=0`, { headers: origin })
+    ).json();
+    for (const doc of stale.docs ?? []) {
+      await request.delete(`/api/posts/${doc.id}`, { headers: origin });
+    }
+
+    const createRes = await request.post("/api/posts", {
+      headers: origin,
+      data: { title: "영어 번역이 없는 글", slug, _status: "published" },
+    });
+    expect(createRes.ok()).toBe(true);
+    const postId = (await createRes.json()).doc.id;
+
+    try {
+      const post = await (await request.get(`/api/getPost/${slug}?locale=en`)).json();
+      expect(post.title).toBe("영어 번역이 없는 글");
+    } finally {
+      await request.delete(`/api/posts/${postId}`, { headers: origin });
+    }
+  });
 });

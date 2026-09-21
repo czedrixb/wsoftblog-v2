@@ -40,49 +40,99 @@ export const Posts: CollectionConfig = {
   },
   fields: [
     {
-      name: "title",
-      type: "text",
-      required: true,
-      localized: true,
-      label: { en: "Title", ko: "제목" },
-      admin: {
-        description: {
-          ko: "한국어와 English 내용은 따로 저장됩니다 — 우측 상단의 locale 스위처로 언어를 전환하세요.",
-          en: "Korean and English content are saved separately — switch with the locale control top right.",
+      // Unnamed tabs keep title/content/titleEn/etc. all top-level fields
+      // (a named tab would namespace them under `ko.title`, breaking
+      // useAsTitle/defaultColumns/listSearchableFields below). Two full
+      // language tabs on one screen so authors never need a locale switcher
+      // to write the other language (WOS-320 follow-up).
+      type: "tabs",
+      tabs: [
+        {
+          label: { en: "Korean", ko: "한국어" },
+          fields: [
+            {
+              name: "title",
+              type: "text",
+              required: true,
+              label: { en: "Title (Korean)", ko: "제목" },
+              admin: {
+                description: {
+                  ko: "글의 제목입니다.",
+                  en: "The post's title.",
+                },
+              },
+            },
+            {
+              name: "content",
+              type: "richText",
+              label: { en: "Content (Korean)", ko: "본문" },
+              admin: {
+                description: {
+                  ko: "본문을 입력하세요. 서식은 위쪽 도구 모음을 사용하세요.",
+                  en: "Write the post body. Use the toolbar above for formatting.",
+                },
+              },
+            },
+            {
+              name: "excerpt",
+              type: "textarea",
+              label: { en: "Excerpt (Korean)", ko: "요약" },
+              admin: {
+                description: {
+                  ko: "목록 화면에 보이는 한두 문장 요약 (선택).",
+                  en: "One or two sentences shown on list pages (optional).",
+                },
+              },
+            },
+          ],
         },
-      },
+        {
+          label: { en: "English", ko: "English" },
+          fields: [
+            {
+              name: "titleEn",
+              type: "text",
+              label: { en: "Title (English)", ko: "제목 (영문)" },
+              admin: {
+                description: {
+                  ko: "선택 사항입니다. 비워두면 한국어 제목이 대신 표시됩니다.",
+                  en: "Optional. If left blank, the Korean title is shown instead.",
+                },
+              },
+            },
+            {
+              name: "contentEn",
+              type: "richText",
+              label: { en: "Content (English)", ko: "본문 (영문)" },
+              admin: {
+                description: {
+                  ko: "선택 사항입니다. 비워두면 한국어 본문이 대신 표시됩니다.",
+                  en: "Optional. If left blank, the Korean content is shown instead.",
+                },
+              },
+            },
+            {
+              name: "excerptEn",
+              type: "textarea",
+              label: { en: "Excerpt (English)", ko: "요약 (영문)" },
+              admin: {
+                description: {
+                  ko: "선택 사항입니다. 비워두면 한국어 요약이 대신 표시됩니다.",
+                  en: "Optional. If left blank, the Korean excerpt is shown instead.",
+                },
+              },
+            },
+          ],
+        },
+      ],
     },
     {
-      name: "content",
-      type: "richText",
-      localized: true,
-      label: { en: "Content", ko: "본문" },
-      admin: {
-        description: {
-          ko: "본문을 입력하세요. 서식은 위쪽 도구 모음을 사용하세요.",
-          en: "Write the post body. Use the toolbar above for formatting.",
-        },
-      },
-    },
-    {
-      // Optional extras an author rarely needs on every post — collapsed by
-      // default so the edit screen stays title + body (WOS-320).
+      // Shared across languages, not part of either tab — collapsed by
+      // default so the edit screen stays title + body first (WOS-320).
       type: "collapsible",
       label: { en: "Additional info", ko: "추가 정보" },
       admin: { initCollapsed: true },
       fields: [
-        {
-          name: "excerpt",
-          type: "textarea",
-          localized: true,
-          label: { en: "Excerpt", ko: "요약" },
-          admin: {
-            description: {
-              ko: "목록 화면에 보이는 한두 문장 요약 (선택).",
-              en: "One or two sentences shown on list pages (optional).",
-            },
-          },
-        },
         {
           name: "banner",
           type: "upload",
@@ -98,7 +148,7 @@ export const Posts: CollectionConfig = {
       ],
     },
     {
-      // Shared across locales on purpose — a post's URL must not change
+      // Shared across languages on purpose — a post's URL must not change
       // when the reader switches language, or inbound links break.
       name: "slug",
       type: "text",

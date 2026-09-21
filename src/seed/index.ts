@@ -169,9 +169,12 @@ async function run() {
   for (const p of posts) {
     await upsertPost(payload, p.slug, () => ({
       title: p.ko.title,
+      titleEn: p.en.title,
       slug: p.slug,
       excerpt: p.ko.excerpt,
+      excerptEn: p.en.excerpt,
       content: richText(p.ko.body),
+      contentEn: richText(p.en.body),
       author: p.author,
       publishedAt:
         p.status === "published"
@@ -179,27 +182,6 @@ async function run() {
           : undefined,
       _status: p.status,
     }));
-  }
-
-  // English locale pass — set once the base (ko) doc exists.
-  for (const p of posts) {
-    const { docs } = await payload.find({
-      collection: "posts",
-      where: { slug: { equals: p.slug } },
-      limit: 1,
-    });
-    const doc = docs[0];
-    if (!doc) continue;
-    await payload.update({
-      collection: "posts",
-      id: doc.id,
-      locale: "en",
-      data: {
-        title: p.en.title,
-        excerpt: p.en.excerpt,
-        content: richText(p.en.body),
-      },
-    });
   }
 
   console.log("Seed complete.");
