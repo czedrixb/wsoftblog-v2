@@ -36,6 +36,13 @@ Full research and the build-vs-adopt decision are in WOS-312.
 | Package manager | pnpm (pinned via `packageManager` in `package.json`) |
 | Node | 22 LTS (`payload` requires `^18.20.2 \|\| >=20.9.0`) |
 
+**pnpm 12 lockfile note:** `pnpm-lock.yaml` is a two-YAML-document file (pnpm
+12 writes a leading "env lockfile" document for its self-managed
+`@pnpm/exe.*` binaries ahead of the real project lockfile). Vercel's
+documented pnpm support tops out at pnpm 10, so a naive single-document
+parser can choke on it — see the Vercel section under Deployment below for
+the mitigation in `vercel.json`.
+
 **Version pin constraint:** `@payloadcms/next@3.89.0`'s peer range for
 `next` is `>=15.2.9 <15.3.0 || >=15.3.9 <15.4.0 || >=15.4.11 <15.5.0 || >=16.2.6 <17.0.0`.
 Don't bump Next past `17.0.0`, or below the matching Payload minor, without
@@ -47,9 +54,17 @@ checking this range first.
 corepack pnpm install
 cp .env.example .env        # fill in PAYLOAD_SECRET with a real generated value
 # start Postgres locally (matching DATABASE_URI: wsoftblog/wsoftblog on localhost:5432)
+corepack pnpm migrate       # applies src/migrations/ (schema is not auto-pushed in production)
 corepack pnpm seed          # creates admin+editor users and ~5 demo posts
 corepack pnpm dev           # http://localhost:3000, admin at /admin
 ```
+
+Local dev still auto-pushes schema changes on every `next dev`/`payload` run
+(`NODE_ENV=development`) — `pnpm migrate` above is only needed the first
+time, or after pulling a new migration. `src/migrations/` holds a single
+squashed baseline (`initial`) capturing the full current schema; there is no
+incremental migration history before it (see the comment at the top of that
+file for why, and `docs/archive/` for what it replaced).
 
 Seeded accounts (override via `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`/
 `SEED_EDITOR_EMAIL`/`SEED_EDITOR_PASSWORD` env vars before seeding):
@@ -83,6 +98,12 @@ can point here by only setting `NUXT_BLOG_API_BASE` — no template changes.
 
 ## Deployment
 
+Two deploy targets exist side by side. The VM path is production; the
+Vercel path (WOS-324) is a **free-tier verification deploy only** — it
+proves the stack works end to end, and is not itself a production decision.
+
+### VM (Bitnami, production)
+
 Bitbucket Pipelines → the same Bitnami VM as `wsoftlabs-website-v2`, on port
 `3001` (the Nuxt site holds `3000`). Blue/green swap with automatic
 rollback, same pattern as the main site's `deploy.sh`.
@@ -97,6 +118,55 @@ Two failure modes from the old blog are deliberately closed here:
 - **Uploads** — `MEDIA_DIR` must point *outside* the deploy directory
   (`APP_PATH`), or the blue/green swap will delete uploaded images on every
   deploy, exactly as happened to the old blog.
+
+**Known gap:** the pipeline does not run `payload migrate` — the VM database
+has never had migration bookkeeping (`payload_migrations`). If that ever
+changes, baseline it first (see the comment at the top of
+`src/migrations/20260921_085427_initial.ts`), or the baseline's `CREATE
+TABLE` statements will collide with the VM's existing schema. Tracked in the
+WOS-324 follow-up ticket, not fixed here.
+
+### Vercel + Supabase (WOS-324, free-tier verification)
+
+Vercel (Next.js hosting, serverless functions) + Supabase (pooled Postgres +
+S3-compatible object storage for media). `next.config.ts`'s `output:
+"standalone"` is conditional on `process.env.VERCEL` — Vercel's own adapter
+breaks if standalone mode is left on.
+
+**Env vars** (Vercel dashboard, Production + Preview unless noted):
+
+| Var | Value | Notes |
+|---|---|---|
+| `DATABASE_URI` | Supabase **transaction pooler**, `:6543` | runtime |
+| `DATABASE_URI_SESSION` | Supabase **session pooler**, `:5432` | build only, used by the migrate step in `vercel.json` |
+| `PAYLOAD_SECRET` | freshly generated, not the VM's value | |
+| `NEXT_PUBLIC_SERVER_URL` | the production `.vercel.app` URL | **Production only** — build-inlined; left unset on Preview so CSRF/serverURL fall back to runtime `VERCEL_*` vars (see `src/lib/deployOrigins.ts`) |
+| `S3_BUCKET` / `S3_ENDPOINT` / `S3_REGION` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | from Supabase Storage → Settings | enables `@payloadcms/storage-s3` in `src/payload.config.ts`; absent → local-disk storage (VM behavior) |
+| `ENABLE_EXPERIMENTAL_COREPACK` | `1` | so Vercel honours `packageManager: pnpm@12.4.1` |
+
+Also enable **Settings → Environment Variables → "Enable access to System
+Environment Variables"**, required for `VERCEL_URL` / `VERCEL_BRANCH_URL` /
+`VERCEL_PROJECT_PRODUCTION_URL` to reach the app.
+
+Do **not** set `MEDIA_DIR` or `NODE_ENV` on Vercel — the former is obsolete
+once `S3_BUCKET` is set, the latter is reserved/managed by the platform.
+
+Bootstrapping a fresh Supabase database from a laptop (proves the migration
+baseline independent of the Vercel build):
+
+```bash
+cp .env.example .env.supabase   # fill in the Supabase values above, plus:
+#   NODE_ENV=production
+#   PAYLOAD_DISABLE_PUSH=true   # belt-and-braces so this shell can never
+#                               # dev-push schema at a remote database
+corepack pnpm migrate:supabase
+corepack pnpm migrate:supabase:status   # every row should read "Yes"
+corepack pnpm seed:supabase
+```
+
+`vercel.json`'s build command runs `payload migrate` (against
+`DATABASE_URI_SESSION`) before `next build`, so every deploy is
+self-migrating — not something to run by hand per-deploy.
 
 ## Fixed — admin "Save Draft" 403 under a production build (CSRF origin)
 
@@ -123,6 +193,18 @@ into the bundle during `next build` (the pipeline writes `.env` before
 building, so CI is covered). Changing the VM's `.env` after the fact does
 nothing for this variable — a wrong value needs a rebuild + redeploy.
 
+**Vercel addendum (WOS-324):** a build-inlined value can never match a
+Vercel *preview* deployment's random `*.vercel.app` hostname. `serverURL`
+and `csrf` are only build-inlined because of the `NEXT_PUBLIC_` prefix —
+`csrf` itself never reaches the client, and `serverURL` is attached to the
+per-request client config server-side, not baked into the bundle. So
+`src/lib/deployOrigins.ts` widens both at runtime from `VERCEL_*` system env
+vars: production keeps an explicit `NEXT_PUBLIC_SERVER_URL`, and previews
+get an empty `serverURL` (→ relative media URLs) plus every origin the
+preview might actually be served from in `csrf`. Same invariant, just
+resolved at request time instead of at build time where a preview can't
+satisfy it.
+
 ## Testing
 
 ```bash
@@ -133,6 +215,22 @@ Requires Postgres reachable at `DATABASE_URI`. With no `E2E_BASE_URL`
 set, Playwright builds and serves a production build itself (port 3100) with
 `NEXT_PUBLIC_SERVER_URL` matching that origin; all specs, including the
 admin-mutation ones, pass against it.
+
+To run against a deployed Vercel URL instead (WOS-324 verification):
+
+```bash
+E2E_BASE_URL=https://<project>.vercel.app \
+SEED_ADMIN_EMAIL=... SEED_ADMIN_PASSWORD=... \
+SEED_EDITOR_EMAIL=... SEED_EDITOR_PASSWORD=... \
+corepack pnpm exec playwright test
+```
+
+`webServer` is skipped entirely when `E2E_BASE_URL` is set. Seed the target
+database first (see the Vercel deployment section above) so the exact-content
+assertions (3 published posts = one page, known slugs) pass. Check the
+project's Deployment Protection setting first — anything stricter than
+"Standard" puts an SSO wall in front of the production domain and every spec
+fails at the first `page.goto`.
 
 ## Backlog (explicitly out of scope for WOS-313)
 

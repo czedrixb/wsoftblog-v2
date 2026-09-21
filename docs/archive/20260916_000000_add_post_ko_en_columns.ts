@@ -1,5 +1,16 @@
 import { MigrateUpArgs, MigrateDownArgs, sql } from '@payloadcms/db-postgres'
 
+// ARCHIVED (WOS-324) — moved out of src/migrations/ (readMigrationFiles()
+// only reads that directory) and superseded by the squashed baseline at
+// src/migrations/20260921_085427_initial.ts. This file reads from
+// posts_locales/media_locales/_posts_v_locales, so it cannot run against a
+// fresh (post-refactor) database — nothing has ever executed it in
+// production, so removing it is safe. It is kept here purely as the
+// historical record of the ko/en column backfill, and as the actual SQL
+// to hand-apply if a pre-refactor database (e.g. the Bitnami VM's, if it
+// never got this change) needs it before being baselined — see the note at
+// the top of the new initial migration.
+//
 // Posts.title/content/excerpt and Media.alt stop being `localized: true` in
 // favor of explicit ko/en fields (title/titleEn, content/contentEn,
 // excerpt/excerptEn) — see src/collections/Posts.ts and Media.ts. With

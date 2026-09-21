@@ -1,5 +1,6 @@
 import { postgresAdapter } from "@payloadcms/db-postgres";
 import { FixedToolbarFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
+import { s3Storage } from "@payloadcms/storage-s3";
 import { en } from "@payloadcms/translations/languages/en";
 import { ko } from "@payloadcms/translations/languages/ko";
 import path from "path";
@@ -10,24 +11,26 @@ import sharp from "sharp";
 import { Posts } from "./collections/Posts";
 import { Media } from "./collections/Media";
 import { Users } from "./collections/Users";
+import { csrfOrigins, serverURL } from "./lib/deployOrigins";
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
 export default buildConfig({
-  serverURL: process.env.NEXT_PUBLIC_SERVER_URL,
+  serverURL,
   // Payload's sanitize step pushes serverURL into this CSRF origin allowlist,
   // silently enabling strict Origin checking on every cookie-authed write.
   // NEXT_PUBLIC_SERVER_URL must therefore match the browser-facing origin
   // EXACTLY (scheme + host spelling + port) or all admin saves 403 — this was
   // the "Save Draft fails in production" bug: prod/e2e served on other ports
-  // while the allowlist only held http://localhost:3000. The extra entries
-  // cover the localhost/127.0.0.1 spelling difference in local dev.
-  csrf: [
-    process.env.NEXT_PUBLIC_SERVER_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-  ].filter((origin): origin is string => Boolean(origin)),
+  // while the allowlist only held http://localhost:3000.
+  //
+  // On Vercel (WOS-324) a build-inlined value can never match a preview's
+  // random *.vercel.app host, so serverURL/csrf are widened at runtime from
+  // VERCEL_* vars instead (see src/lib/deployOrigins.ts) — production gets
+  // its own stable domain, previews get relative media URLs plus every
+  // origin they might actually be served from.
+  csrf: csrfOrigins,
   admin: {
     user: Users.slug,
     importMap: {
@@ -58,9 +61,30 @@ export default buildConfig({
     outputFile: path.resolve(dirname, "payload-types.ts"),
   },
   db: postgresAdapter({
+    // findMigrationDir() would resolve src/migrations from process.cwd()
+    // anyway, but pin it so it doesn't depend on where the CLI is invoked.
+    migrationDir: path.resolve(dirname, "migrations"),
+    // Never let the adapter try `CREATE DATABASE` against Supabase.
+    disableCreateDatabase: true,
     pool: {
       connectionString: process.env.DATABASE_URI || "",
+      // Supavisor hands the connection back after every transaction, so a
+      // per-lambda pool >1 on Vercel just holds idle sockets against
+      // Supabase's pooler connection ceiling for no benefit.
+      max: process.env.VERCEL ? 1 : 10,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 10_000,
     },
+    // Off-switch only (connect() already disables dev-push when
+    // NODE_ENV=production), so this can't accidentally push schema. Exists
+    // so a dev-mode local shell can be safely pointed at Supabase (e.g. to
+    // seed it) without pushDevSchema() running and writing the batch:-1
+    // marker row that makes `payload migrate` hang/no-op in CI (WOS-324).
+    ...(process.env.PAYLOAD_DISABLE_PUSH === "true" ? { push: false } : {}),
+    // prodMigrations deliberately NOT set: it would run inside connect() on
+    // every serverless cold start with no locking — concurrent cold starts
+    // would race the same DDL. Migrations run once, at build time, via the
+    // Vercel build command (see vercel.json) and the `migrate` script below.
   }),
   sharp,
   // Non-devs publish unaided (WOS-312 §5) — the admin UI opens in Korean by
@@ -71,5 +95,37 @@ export default buildConfig({
     fallbackLanguage: "ko",
     supportedLanguages: { en, ko },
   },
-  plugins: [],
+  plugins: [
+    // Vercel's filesystem is ephemeral/read-only outside /tmp, so uploads
+    // must go to object storage there (WOS-324). On the Bitnami VM (no
+    // S3_BUCKET set) this is a no-op and Media.upload.staticDir / MEDIA_DIR
+    // keep working exactly as before.
+    s3Storage({
+      enabled: Boolean(process.env.S3_BUCKET),
+      collections: {
+        // `true`, not an options object, deliberately:
+        //  - no disablePayloadAccessControl: URLs stay /api/media/file/<name>,
+        //    so mediaPath(), next.config.ts's images.localPatterns, and
+        //    banner-image.spec.ts all keep working untouched. (Supabase's
+        //    disablePayloadAccessControl URL is the SigV4 S3 gateway path,
+        //    not a public URL, so direct URLs would need a custom
+        //    generateFileURL too — not worth it for a verification deploy.)
+        //  - no prefix: @payloadcms/plugin-cloud-storage only adds a
+        //    `prefix` DB column when prefix/alwaysInsertFields is set, so
+        //    the drizzle schema is identical whether this plugin is enabled
+        //    or not — one baseline migration covers both deploy targets.
+        media: true,
+      },
+      bucket: process.env.S3_BUCKET || "",
+      config: {
+        endpoint: process.env.S3_ENDPOINT,
+        region: process.env.S3_REGION,
+        forcePathStyle: true, // Supabase's S3 gateway is path-style only
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
+          secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
+        },
+      },
+    }),
+  ],
 });

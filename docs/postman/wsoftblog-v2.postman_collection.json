@@ -1,0 +1,1013 @@
+{
+  "info": {
+    "_postman_id": "b5b8b6a0-3b7a-4c1a-9f1e-wsoftblogv2api",
+    "name": "wsoftblog-v2 API",
+    "description": "REST API for the W Labs blog (Payload CMS 3.89 on Next.js, Postgres). Covers auth plus core CRUD for `posts`, `media`, and `users`, and the two legacy wire-compat endpoints the Nuxt marketing site consumes.\n\n## Setup\n1. Import the companion environment file (`wsoftblog-v2.local.postman_environment.json`) and select it.\n2. Point `baseUrl` at your running server (default `http://localhost:3000` — must match `NEXT_PUBLIC_SERVER_URL` in `.env` **exactly**, see below).\n3. Run **00 · Auth → Login** once. Everything else authenticates automatically from there.\n4. Run **05 · End Session → Logout** last — not before. See that folder's description for why.\n\n## Auth model\nEvery request in this collection inherits collection-level auth: `Authorization: JWT {{authToken}}`, populated by the Login request's test script. This app is deliberately **not** cookie-friendly to non-browser clients: `src/payload.config.ts` sets a non-empty `csrf` allowlist, and Payload's cookie-auth strategy requires either an `Origin` header matching that allowlist or a `Sec-Fetch-Site` header — neither of which a plain HTTP client sends. The `JWT <token>` header sidesteps CSRF checking entirely. A collection-level pre-request script also stamps `Origin: {{baseUrl}}` on every request, so switching a request to cookie auth still works.\n\n## Gotchas\n- **IDs are integers** (Postgres adapter) — `banner`, `author`, and every `:id` path segment take a plain number.\n- **`?locale=` only works on the two \"Legacy wire-compat\" requests.** `/api/posts` has no Payload localization configured; Korean/English are separate sibling fields (`title` vs `titleEn`, etc.).\n- **Create responses are wrapped**: `{ message, doc: {...} }` — the new id is at `.doc.id`.\n- **`publishedAt` isn't auto-stamped on create**, only on a later update while it's still empty — see \"Publish Post\".\n- **Media upload is multipart** with JSON fields packed into a `_payload` text part, not plain form fields.\n- **`POST`/`DELETE` on `/api/users` require `role: \"admin\"`.**\n- **Anonymous reads of `/api/posts` are always filtered to `_status: \"published\"`**, regardless of any `where` you send.\n- **A relationship id in a JSON body must be a bare number, not a quoted variable.** Postman substitutes variables as text, so `\"{{mediaId}}\"` becomes the string `\"123\"` — this API 400s that for `banner`/`author` (strict `typeof value === \"number\"` check, see `node_modules/payload/dist/utilities/isValidID.js`). \"Create Post\" writes `{{mediaId}}` unquoted for exactly this reason; copy that pattern for any other numeric field you template.\n- **Logout ends the whole session, not just this token.** `useSessions: true` (Payload's default) means logout deletes the session server-side; the same JWT is then rejected everywhere, long before its 2-hour expiry. Keep \"05 · End Session → Logout\" last.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "Authorization",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "JWT {{authToken}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Every write needs Origin to equal NEXT_PUBLIC_SERVER_URL exactly, or",
+          "// Payload's CSRF check discards cookie-based auth and 403s. Harmless to",
+          "// send on GETs too, and keeps this collection working if a request's",
+          "// auth is ever switched from the header strategy to the cookie jar.",
+          "pm.request.headers.upsert({ key: \"Origin\", value: pm.variables.get(\"baseUrl\") });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "postId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "postSlug",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mediaId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "legacyPostSlug",
+      "value": "welcome-to-the-w-labs-blog",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 · Auth",
+      "description": "Payload's built-in auth endpoints for the `users` collection (`auth: true` in `src/collections/Users.ts`).\n\n**Run \"Login\" first** — its test script captures the JWT into the collection variable `authToken`, which every other request in this collection sends as `Authorization: JWT {{authToken}}` (set once, at the collection level, under this collection's Authorization tab).\n\nWhy a header and not the cookie Postman would normally store: this app sets a non-empty `csrf` allowlist (`src/payload.config.ts`), and Payload's cookie-auth strategy silently drops the token for any request that has neither an `Origin` header nor a `Sec-Fetch-Site` header — exactly what a plain HTTP client sends. The `JWT <token>` header bypasses that check entirely (`node_modules/payload/dist/auth/extractJWT.js`).\n\nLogout lives in its own folder at the very end (`05 · End Session`), not here — see that folder's description for why order matters.",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "login"
+              ]
+            },
+            "description": "Authenticates and returns `{ message, user, token, exp }`. `token` is a JWT valid for 2 hours; `user.role` (`admin`/`editor`) rides inside it because `role` has `saveToJWT: true` in `src/collections/Users.ts`.\n\nThe test script below saves `token` into the collection variable `authToken` so every subsequent request authenticates automatically.\n\n**Body fields**\n| field | type | required |\n|---|---|---|\n| `email` | string | yes |\n| `password` | string | yes |\n\nSeed credentials (see `src/seed/index.ts`): `admin@wsoftlabs.dev` / `changeme-admin-123` (role `admin`) and `editor@wsoftlabs.dev` / `changeme-editor-123` (role `editor`). The environment ships the admin pair as `adminEmail`/`adminPassword` so every write in this collection (which requires `admin`) works out of the box."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"login succeeds\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.test(\"response includes a token\", function () {",
+                  "  pm.expect(json.token).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"authToken\", json.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            },
+            "description": "Returns the user matching the current `authToken`, or `{ user: null }` if unauthenticated/expired. Useful as a quick \"is my token still good\" check.\n\nResponse shape: `{ user: { id, name, email, role, ... }, token, exp, message }`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 · Media",
+      "description": "The `media` upload collection (`src/collections/Media.ts`) — image library used for post banners. Reads are fully public; writes require an authenticated user.\n\n**Run \"Upload Media\" first** in this folder — its test script captures the new doc's id into `mediaId`, which the Posts folder's \"Create Post\" request attaches as the post's `banner`.\n\nThere's no \"Delete Media\" request here: with a post attached to it via `banner`, deleting the media first would either fail the FK constraint or leave the post's banner dangling. That cleanup step lives at the end of `02 · Posts`, once the referencing post is gone.",
+      "item": [
+        {
+          "name": "Upload Media",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "The image file. Restricted to mimeTypes: image/* (src/collections/Media.ts)."
+                },
+                {
+                  "key": "_payload",
+                  "type": "text",
+                  "value": "{\"alt\":\"Postman collection sample upload\"}",
+                  "description": "JSON-encoded string of every non-file field on the doc. `alt` is required (src/collections/Media.ts). This `_payload` wrapper is how Payload accepts field data alongside a multipart file — plain form fields are not read."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "media"
+              ]
+            },
+            "description": "Uploads an image. **Select a file for the `file` form-data key before sending** — Postman collections can't embed binary content, so it isn't pre-filled.\n\nPayload auto-generates `thumbnail` (400×300) and `banner` (1600×900) sized variants (`src/collections/Media.ts`) and returns their URLs under `doc.sizes`.\n\nResponse is wrapped: `{ message, doc: { id, url, filename, mimeType, filesize, width, height, sizes, alt, ... } }` — the id is at `.doc.id`, not `.id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"upload succeeds\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"mediaId\", json.doc.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Media",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/media?limit=10&depth=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "media"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Page size. Payload default is 10.",
+                  "disabled": false
+                },
+                {
+                  "key": "depth",
+                  "value": "0",
+                  "description": "Relationship/upload population depth. 0 = ids only.",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Public — no auth required. Returns the standard Payload list envelope: `{ docs, totalDocs, page, totalPages, hasNextPage, hasPrevPage, ... }`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Media by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/media/{{mediaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "media",
+                "{{mediaId}}"
+              ]
+            },
+            "description": "Public — no auth required. 404s with `{ errors: [...] }` if the id doesn't exist."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Media (alt text)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alt\": \"Updated via Postman collection\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/media/{{mediaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "media",
+                "{{mediaId}}"
+              ]
+            },
+            "description": "Requires auth (default collection access — no explicit `update` rule in `src/collections/Media.ts`). Only non-file fields can be changed this way; to replace the file itself, re-upload.\n\n**Body fields**\n| field | type | required |\n|---|---|---|\n| `alt` | string | yes (collection-required, but PATCH only needs the fields you're changing) |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 · Posts",
+      "description": "The `posts` collection (`src/collections/Posts.ts`) — the blog's core content type, with drafts/versions enabled.\n\n**Bilingual content is NOT Payload localization.** `localization` is deliberately unconfigured — Korean lives in `title`/`content`/`excerpt`, English in the sibling `titleEn`/`contentEn`/`excerptEn` fields. `?locale=` has no effect on these endpoints (it only means something on the legacy `/api/getPosts` / `/api/getPost` routes in folder 04).\n\n**Run \"Create Post\" first** in this folder — it attaches the media doc from folder 01 as `banner` and its test script captures `postId`/`postSlug` for every other request here. This folder's last request, \"Delete Media\", cleans up that media doc too (see its description for why it isn't in the Media folder).",
+      "item": [
+        {
+          "name": "Create Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Postman collection sample post\",\n  \"slug\": \"postman-sample-{{$timestamp}}\",\n  \"excerpt\": \"Created by the wsoftblog-v2 Postman collection.\",\n  \"content\": {\n    \"root\": {\n      \"type\": \"root\",\n      \"children\": [\n        {\n          \"type\": \"paragraph\",\n          \"children\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"This post was created by the wsoftblog-v2 Postman collection's \\\"Create Post\\\" request.\",\n              \"version\": 1\n            }\n          ],\n          \"direction\": \"ltr\",\n          \"format\": \"\",\n          \"indent\": 0,\n          \"version\": 1\n        }\n      ],\n      \"direction\": \"ltr\",\n      \"format\": \"\",\n      \"indent\": 0,\n      \"version\": 1\n    }\n  },\n  \"banner\": {{mediaId}},\n  \"_status\": \"draft\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "posts"
+              ]
+            },
+            "description": "Requires auth (any logged-in user — `create: ({ req }) => Boolean(req.user)`).\n\n**Body fields**\n| field | type | required | notes |\n|---|---|---|---|\n| `title` | string | **yes** | Korean/base title |\n| `slug` | string | no | auto-slugified from `title` if omitted; must be unique |\n| `content` | Lexical richText JSON | no | Korean/base body — see the raw body for the minimal shape |\n| `excerpt` | string | no | Korean/base one-liner |\n| `titleEn` / `contentEn` / `excerptEn` | same types | no | English counterparts; omitted here, so this post falls back to Korean for English readers |\n| `banner` | integer | no | a `media` doc id — pre-filled from `{{mediaId}}` (folder 01). Left **unquoted** in the raw body on purpose: this API 400s a relationship id sent as a numeric string (`\"123\"`), so the variable must substitute to a bare JSON number (`123`). |\n| `author` | integer | no | a `users` doc id |\n| `_status` | `\"draft\"` \\| `\"published\"` | no | drafts are never returned to anonymous readers |\n\n**Gotcha**: `publishedAt` is only auto-stamped by a hook on *update*, not on create (`src/collections/Posts.ts`) — so creating directly with `_status: \"published\"` still leaves `publishedAt` null until the post is next saved. See \"Publish Post\" below, which sets it explicitly.\n\nResponse is wrapped: `{ message, doc: { id, ... } }`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"create succeeds\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"postId\", json.doc.id);",
+                  "pm.collectionVariables.set(\"postSlug\", json.doc.slug);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Posts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/posts?limit=10&sort=-publishedAt&depth=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Page size. Payload default is 10.",
+                  "disabled": false
+                },
+                {
+                  "key": "sort",
+                  "value": "-publishedAt",
+                  "description": "Field to sort by; prefix with - for descending.",
+                  "disabled": false
+                },
+                {
+                  "key": "depth",
+                  "value": "1",
+                  "description": "Population depth for banner/author relationships.",
+                  "disabled": false
+                },
+                {
+                  "key": "where[_status][equals]",
+                  "value": "draft",
+                  "description": "Example filter — only visible to an authenticated user; anonymous reads are always forced to published.",
+                  "disabled": true
+                },
+                {
+                  "key": "draft",
+                  "value": "true",
+                  "description": "Include the draft version of documents that have one, instead of only the last-published version.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Anonymous callers only ever see `{ _status: { equals: \"published\" } }` docs, regardless of `where` — enforced server-side in `src/collections/Posts.ts`. Log in (folder 00) to also see drafts.\n\nReturns the standard Payload list envelope: `{ docs, totalDocs, page, totalPages, hasNextPage, hasPrevPage, ... }`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Post by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/posts/{{postId}}?depth=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "posts",
+                "{{postId}}"
+              ],
+              "query": [
+                {
+                  "key": "depth",
+                  "value": "1",
+                  "description": "Population depth for banner/author relationships.",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "404s with `{ errors: [...] }` if the id doesn't exist or (for anonymous callers) isn't published."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Find Post by Slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/posts?where[slug][equals]={{postSlug}}&depth=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "where[slug][equals]",
+                  "value": "{{postSlug}}",
+                  "description": "Exact slug match.",
+                  "disabled": false
+                },
+                {
+                  "key": "depth",
+                  "value": "0",
+                  "description": "0 = return relationship ids only, no population.",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "`slug` is unique but is not the document id, so looking a post up by its URL slug means a `where` filter on the list endpoint rather than a direct `/api/posts/:id` call. Returns the list envelope — expect `docs.length` to be 0 or 1."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publish Post",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"_status\": \"published\",\n  \"publishedAt\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/posts/{{postId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "posts",
+                "{{postId}}"
+              ]
+            },
+            "description": "Requires auth. Flips the post live and stamps `publishedAt` explicitly — relying on the auto-stamp hook alone only works on an update where the value is still empty, so an explicit timestamp here is the reliable way to publish-with-a-date in one call.\n\n**Body fields**\n| field | type | required |\n|---|---|---|\n| `_status` | `\"draft\"` \\| `\"published\"` | no |\n| `publishedAt` | ISO date string | no |\n\nOnce published, this post becomes visible to anonymous `GET` requests (List Posts, Find Post by Slug, and both legacy endpoints in folder 04)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Post",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/posts/{{postId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "posts",
+                "{{postId}}"
+              ]
+            },
+            "description": "Requires auth. Run this before \"Delete Media\" below — it's the post referencing that media doc as its `banner`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Media",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/media/{{mediaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "media",
+                "{{mediaId}}"
+              ]
+            },
+            "description": "Cleans up the media doc uploaded in `01 · Media`. Placed here, after \"Delete Post\" above, rather than in the Media folder — this post's `banner` pointed at it, so deleting the media first (while the post still referenced it) would fail or leave a dangling reference. Requires auth; also deletes the file from disk (`MEDIA_DIR`)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 · Users",
+      "description": "The `users` auth collection (`src/collections/Users.ts`). Two roles only: `editor` (write posts) and `admin` (also manages users).\n\nCollection-level `read` is public (so a post byline/author name can be shown to anonymous readers), but the `email` and `role` fields individually require an authenticated caller — an anonymous `GET` sees `name` only.\n\n**Run \"Create User\" first** in this folder (requires the admin token from folder 00) — its test script captures `userId` for the requests below.",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Sample Editor\",\n  \"email\": \"postman-sample-{{$timestamp}}@wsoftlabs.dev\",\n  \"password\": \"changeme-postman-123\",\n  \"role\": \"editor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "description": "**Requires `role: \"admin\"`** — `create: ({ req }) => req.user?.role === \"admin\"`. An editor token gets a 403 here.\n\n**Body fields**\n| field | type | required | notes |\n|---|---|---|---|\n| `name` | string | yes | |\n| `email` | string | yes | unique |\n| `password` | string | yes | injected by `auth: true`; never returned in any response |\n| `role` | `\"editor\"` \\| `\"admin\"` | no | defaults to `\"editor\"`; only an admin may set/change it |\n\nResponse is wrapped: `{ message, doc: { id, ... } }` (no `token` — creating a user via this endpoint does not log in as them)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"create succeeds\", function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"userId\", json.doc.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Page size. Payload default is 10.",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Public — no auth required, but each doc's `email` and `role` only appear when the request is authenticated (field-level access in `src/collections/Users.ts`). Compare this response logged out vs. logged in."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "Same field-level visibility rule as List Users applies here."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Sample Editor (renamed)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "An admin can update anyone; a non-admin can only update their own doc (`update: { id: { equals: req.user?.id } }` for everyone else). Changing `role` additionally requires `role === \"admin\"` regardless of whose doc it is.\n\n**Body fields**\n| field | type | required |\n|---|---|---|\n| `name` | string | no |\n| `role` | `\"editor\"` \\| `\"admin\"` | no — admin-only to change |"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "**Requires `role: \"admin\"`** — same rule as Create User."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 · Legacy wire-compat",
+      "description": "Hand-written Next.js routes (`src/app/api/getPosts`, `src/app/api/getPost/[id]`) that reproduce the old Laravel `BlogController` response shape byte-for-byte, so `wsoftlabs-website-v2`'s Nuxt proxies (`server/api/getBlogs.get.js`, `getPost/[id].get.js`) can point at this app by only flipping an env var — no template changes on that side (see WOS-314).\n\nThese are **read-only, always public, and unrelated to the Payload REST API above**: field names are flat snake_case (`banner_url`, `published_at`), the list endpoint returns a bare JSON array (not the `{docs, ...}` envelope), and `?locale=` — meaningless on `/api/posts` — is exactly how these two routes choose Korean vs. English.\n\nRequests below target `welcome-to-the-w-labs-blog`, a post created by `pnpm seed` (`src/seed/index.ts`) — reseed first if it's missing.",
+      "item": [
+        {
+          "name": "Legacy: List Posts (default locale)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/getPosts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "getPosts"
+              ]
+            },
+            "description": "No `locale` param defaults to Korean (`src/lib/locale.ts`). Returns a bare array, capped at 50, sorted by `-publishedAt`, drafts excluded. Each item omits `content` (full body) to keep the list light — see \"Legacy: Get Post by Slug\" for that."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"returns a bare array\", function () {",
+                  "  pm.expect(Array.isArray(pm.response.json())).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Legacy: List Posts (English)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/getPosts?locale=en",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "getPosts"
+              ],
+              "query": [
+                {
+                  "key": "locale",
+                  "value": "en",
+                  "description": "Accepted aliases: en. (ko/kr/ko-kr all map to Korean; anything else falls back to Korean too.)",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Same endpoint as above with `?locale=en`. Any post missing an English translation (`titleEn` etc. empty) falls back to its Korean text field-by-field (`pick()` in `src/lib/locale.ts`) rather than being omitted."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Legacy: Get Post by Slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/getPost/{{legacyPostSlug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "getPost",
+                "{{legacyPostSlug}}"
+              ]
+            },
+            "description": "Accepts either a numeric legacy id or a slug (`/^\\d+$/` picks which) — this request uses the slug form. Unlike the list endpoint, the detail response includes `content` as a rendered **HTML string** (Lexical JSON converted server-side). 404 body on a miss: `{ \"message\": \"Post not found.\" }`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 · End Session",
+      "description": "Logout is deliberately last, in its own folder, and not grouped with Login in `00 · Auth`.\n\nThis app uses Payload's default `auth.useSessions: true`, which tracks each login as a session entry (keyed by a `sid` claim inside the JWT) on the user's own doc. Logout deletes that session server-side (`node_modules/payload/dist/auth/operations/logout.js`), and the JWT auth strategy checks the `sid` against the user's remaining sessions on every request (`node_modules/payload/dist/auth/strategies/jwt.js`) — so **the same token stops authenticating immediately after logout**, well before its 2-hour expiry. Run this after every other folder, or every write for the rest of the run will 403.",
+      "item": [
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "logout"
+              ]
+            },
+            "description": "Ends the current session (pass `?allSessions=true` to end every session for this user instead of just this one). The response confirms with `{ message }`; the `authToken` variable still holds the now-rejected JWT until you Login again."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
