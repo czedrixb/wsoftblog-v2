@@ -21,10 +21,13 @@ const dirname = path.dirname(filename);
 // generateFileData's fs.mkdir('media') throws ENOENT, and every upload 500s
 // with no admin-visible reason why (WOS-329: this happened for weeks because
 // Vercel's Production Branch was still `main`, which had no s3Storage plugin
-// at all). Fail loudly at boot instead of on the first upload attempt.
+// at all). Warn loudly rather than throw: this file is imported by every
+// route, so a hard throw here takes down the entire site (posts, admin,
+// everything) on any S3_BUCKET scoping mistake — worse than the one broken
+// upload flow it's meant to catch.
 if (process.env.VERCEL && !process.env.S3_BUCKET) {
-  throw new Error(
-    "S3_BUCKET is required on Vercel — media uploads cannot fall back to the local filesystem.",
+  console.error(
+    "S3_BUCKET is not set on Vercel — media uploads will try the local filesystem and fail (ENOENT).",
   );
 }
 
