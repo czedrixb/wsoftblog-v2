@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { getPayload } from "@/lib/getPayload";
+import { getPostsPage } from "@/lib/cachedPosts";
 import { resolveLocale, withLocale } from "@/lib/locale";
 import { mediaPath } from "@/lib/mediaPath";
 import { SiteHeader } from "@/components/frontend/SiteHeader";
@@ -8,10 +8,9 @@ import { t } from "@/lib/strings";
 
 // Force dynamic rendering — otherwise Next 16's production build can
 // statically prerender this list at build time and never see new/updated/
-// deleted posts again without a full rebuild.
+// deleted posts again without a full rebuild. Freshness/resilience of the
+// post data itself is handled by unstable_cache in src/lib/cachedPosts.ts.
 export const dynamic = "force-dynamic";
-
-const PAGE_SIZE = 10;
 
 type Props = {
   searchParams: Promise<{ page?: string; locale?: string }>;
@@ -22,15 +21,7 @@ export default async function BlogListPage({ searchParams }: Props) {
   const locale = resolveLocale(params.locale);
   const page = Math.max(1, Number(params.page) || 1);
 
-  const payload = await getPayload();
-  const { docs, totalPages, hasNextPage, hasPrevPage } = await payload.find({
-    collection: "posts",
-    overrideAccess: false,
-    sort: "-publishedAt",
-    limit: PAGE_SIZE,
-    page,
-    depth: 1,
-  });
+  const { docs, totalPages, hasNextPage, hasPrevPage } = await getPostsPage(page);
 
   const strings = t(locale);
 

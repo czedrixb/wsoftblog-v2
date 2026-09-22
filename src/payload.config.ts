@@ -84,9 +84,14 @@ export default buildConfig({
     pool: {
       connectionString: process.env.DATABASE_URI || "",
       // Supavisor hands the connection back after every transaction, so a
-      // per-lambda pool >1 on Vercel just holds idle sockets against
-      // Supabase's pooler connection ceiling for no benefit.
-      max: process.env.VERCEL ? 1 : 10,
+      // large per-instance pool on Vercel mostly holds idle sockets against
+      // Supabase's pooler ceiling — but max: 1 is worse: Fluid compute routes
+      // concurrent requests into one instance, and a single stalled connect
+      // makes every request on that instance queue behind it until
+      // connectionTimeoutMillis kills them all (WOS-329 outage). 5 keeps the
+      // idle-socket cost small while letting requests fail independently;
+      // idleTimeoutMillis below returns sockets after 10s anyway.
+      max: process.env.VERCEL ? 5 : 10,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 10_000,
     },
