@@ -138,7 +138,7 @@ breaks if standalone mode is left on.
 | Var | Value | Notes |
 |---|---|---|
 | `DATABASE_URI` | Supabase **transaction pooler**, `:6543` | runtime |
-| `DATABASE_URI_SESSION` | Supabase **session pooler**, `:5432` | build only, used by the migrate step in `vercel.json` |
+| `DATABASE_URI_SESSION` | Supabase **session pooler**, `:5432` | only used by the manual laptop bootstrap below, not by the build |
 | `PAYLOAD_SECRET` | freshly generated, not the VM's value | |
 | `NEXT_PUBLIC_SERVER_URL` | the production `.vercel.app` URL | **Production only** — build-inlined; left unset on Preview so CSRF/serverURL fall back to runtime `VERCEL_*` vars (see `src/lib/deployOrigins.ts`) |
 | `S3_BUCKET` / `S3_ENDPOINT` / `S3_REGION` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | from Supabase Storage → Settings | enables `@payloadcms/storage-s3` in `src/payload.config.ts`; absent → local-disk storage (VM behavior) |
@@ -172,9 +172,16 @@ corepack pnpm migrate:supabase:status   # every row should read "Yes"
 corepack pnpm seed:supabase
 ```
 
-`vercel.json`'s build command runs `payload migrate` (against
-`DATABASE_URI_SESSION`) before `next build`, so every deploy is
-self-migrating — not something to run by hand per-deploy.
+**`vercel.json`'s build command does *not* run `payload migrate`.** It did
+originally (WOS-324), but Vercel's *build* container could not reach
+Supabase's pooler at all (bare TCP connect timeout) even with credentials
+that were independently verified to work — reachable, unrestricted, correct
+password — from both a laptop and the deployed *function* runtime (which
+successfully serves `/api/posts` and `/api/media` today). Whatever blocks
+outbound DB connections from Vercel's build step specifically remains
+unexplained; rather than block every deploy on it, migrations here go back
+to being applied by hand from a laptop (below), the same as the VM. Re-adding
+a build-time migrate step is a follow-up, not a blocker (WOS-329).
 
 ## Fixed — admin "Save Draft" 403 under a production build (CSRF origin)
 
