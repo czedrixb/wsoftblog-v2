@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { RichText } from "@payloadcms/richtext-lexical/react";
-import { getPayload } from "@/lib/getPayload";
+import { getPostBySlug } from "@/lib/cachedPosts";
 import { resolveLocale } from "@/lib/locale";
 import { mediaPath } from "@/lib/mediaPath";
 import { SiteHeader } from "@/components/frontend/SiteHeader";
@@ -19,16 +19,7 @@ export default async function PostDetailPage({ params, searchParams }: Props) {
   const { locale: localeParam } = await searchParams;
   const locale = resolveLocale(localeParam);
 
-  const payload = await getPayload();
-  const { docs } = await payload.find({
-    collection: "posts",
-    overrideAccess: false,
-    where: { slug: { equals: slug } },
-    limit: 1,
-    depth: 2,
-  });
-
-  const post = docs[0];
+  const post = await getPostBySlug(slug);
   if (!post) notFound();
 
   const banner = typeof post.banner === "object" && post.banner ? post.banner : null;
