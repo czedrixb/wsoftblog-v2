@@ -16,6 +16,18 @@ import { csrfOrigins, serverURL } from "./lib/deployOrigins";
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
+// On Vercel the filesystem is read-only outside /tmp, so a missing S3_BUCKET
+// doesn't degrade to local storage — Media's disableLocalStorage stays false,
+// generateFileData's fs.mkdir('media') throws ENOENT, and every upload 500s
+// with no admin-visible reason why (WOS-329: this happened for weeks because
+// Vercel's Production Branch was still `main`, which had no s3Storage plugin
+// at all). Fail loudly at boot instead of on the first upload attempt.
+if (process.env.VERCEL && !process.env.S3_BUCKET) {
+  throw new Error(
+    "S3_BUCKET is required on Vercel — media uploads cannot fall back to the local filesystem.",
+  );
+}
+
 export default buildConfig({
   serverURL,
   // Payload's sanitize step pushes serverURL into this CSRF origin allowlist,

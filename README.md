@@ -148,6 +148,14 @@ Also enable **Settings → Environment Variables → "Enable access to System
 Environment Variables"**, required for `VERCEL_URL` / `VERCEL_BRANCH_URL` /
 `VERCEL_PROJECT_PRODUCTION_URL` to reach the app.
 
+**Settings → Git → Production Branch must be `main`.** WOS-329: this branch
+was merged into `main` after Vercel's Production Branch was found still
+pointing at pre-merge `main` (`plugins: []`, no `s3Storage`) — every media
+upload attempted a local-disk write on Vercel's read-only filesystem and
+500'd. `src/payload.config.ts` now throws at boot if `VERCEL` is set without
+`S3_BUCKET`, so a repeat of this fails the deploy loudly instead of only the
+first upload.
+
 Do **not** set `MEDIA_DIR` or `NODE_ENV` on Vercel — the former is obsolete
 once `S3_BUCKET` is set, the latter is reserved/managed by the platform.
 

@@ -141,14 +141,15 @@ async function fireRequest(
   const authToken = vars.get("authToken");
   if (authToken) headers["Authorization"] = `JWT ${authToken}`;
 
-  const options: { headers: Record<string, string>; data?: unknown; multipart?: Record<string, unknown> } = {
+  type MultipartValue = string | number | boolean | { name: string; mimeType: string; buffer: Buffer };
+  const options: { headers: Record<string, string>; data?: unknown; multipart?: Record<string, MultipartValue> } = {
     headers,
   };
 
   if (item.request.body?.mode === "raw" && item.request.body.raw) {
     options.data = JSON.parse(resolve(item.request.body.raw, vars));
   } else if (item.request.body?.mode === "formdata" && item.request.body.formdata) {
-    const multipart: Record<string, unknown> = {};
+    const multipart: Record<string, MultipartValue> = {};
     for (const field of item.request.body.formdata) {
       multipart[field.key] =
         field.type === "file"
